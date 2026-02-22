@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Radar de Contas</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{--bg:#0a0c10;--surface:#111318;--surface2:#181c24;--border:rgba(255,255,255,0.07);--accent:#00e5a0;--accent2:#ff6b35;--accent3:#4d9fff;--text:#e8eaf0;--muted:#5a6070;--hot:#ff4757;--warm:#ffa502;--cold:#4d9fff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,160,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,160,0.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+  body::after{content:'';position:fixed;top:-20%;right:-10%;width:600px;height:600px;background:radial-gradient(circle,rgba(0,229,160,0.06) 0%,transparent 70%);pointer-events:none;z-index:0}
+  .app{position:relative;z-index:1}
+
+  /* ROLE PICKER */
+  .role-screen{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px}
+  .role-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:36px;width:100%;max-width:400px;text-align:center}
+  .role-logo{width:48px;height:48px;border:2px solid var(--accent);border-radius:12px;display:flex;align-items:center;justify-content:center;position:relative;margin:0 auto 20px}
+  .role-logo::before{content:'';width:14px;height:14px;background:var(--accent);border-radius:50%;animation:pulse 2s ease-in-out infinite}
+  .role-logo::after{content:'';position:absolute;width:24px;height:24px;border:2px solid rgba(0,229,160,0.3);border-radius:50%;animation:ripple 2s ease-out infinite}
+  .role-title{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;margin-bottom:6px}
+  .role-sub{color:var(--muted);font-size:13px;margin-bottom:28px}
+  .role-btns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .role-btn{padding:18px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;transition:all .2s;text-align:center}
+  .role-btn:hover{border-color:rgba(0,229,160,0.4);background:rgba(0,229,160,0.05)}
+  .role-btn-icon{font-size:28px;display:block;margin-bottom:8px}
+  .role-btn strong{display:block;font-family:'Syne',sans-serif;font-size:14px;margin-bottom:4px}
+  .role-btn span{font-size:11px;color:var(--muted)}
+
+  header{display:flex;align-items:center;justify-content:space-between;padding:20px 32px;border-bottom:1px solid var(--border);background:rgba(10,12,16,0.8);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100}
+  .logo{display:flex;align-items:center;gap:12px}
+  .logo-icon{width:36px;height:36px;border:1.5px solid var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative}
+  .logo-icon::before{content:'';width:10px;height:10px;background:var(--accent);border-radius:50%;animation:pulse 2s ease-in-out infinite}
+  .logo-icon::after{content:'';position:absolute;width:20px;height:20px;border:1.5px solid rgba(0,229,160,0.3);border-radius:50%;animation:ripple 2s ease-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.15);opacity:.8}}
+  @keyframes ripple{0%{transform:scale(.5);opacity:.8}100%{transform:scale(1.5);opacity:0}}
+  .logo h1{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;letter-spacing:-.3px}
+  .logo span{font-weight:400;color:var(--muted)}
+  .header-right{display:flex;align-items:center;gap:10px}
+  .live-badge{display:flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);background:rgba(0,229,160,0.08);border:1px solid rgba(0,229,160,0.2);border-radius:20px;padding:4px 12px}
+  .live-dot{width:6px;height:6px;background:var(--accent);border-radius:50%;animation:blink 1.5s ease-in-out infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+  .role-badge{font-family:'DM Mono',monospace;font-size:10px;padding:4px 10px;border-radius:20px;border:1px solid}
+  .role-badge.admin{color:var(--warm);border-color:rgba(255,165,2,0.3);background:rgba(255,165,2,0.08)}
+  .role-badge.viewer{color:var(--cold);border-color:rgba(77,159,255,0.3);background:rgba(77,159,255,0.08)}
+  .sync-indicator{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);display:flex;align-items:center;gap:5px}
+  .sync-indicator.syncing{color:var(--warm)}.sync-indicator.synced{color:var(--accent)}.sync-indicator.error{color:var(--hot)}
+  .btn-excel{background:transparent;color:var(--accent);border:1px solid rgba(0,229,160,0.3);padding:8px 16px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s}
+  .btn-excel:hover{background:rgba(0,229,160,0.08)}
+  .btn-import{background:transparent;color:var(--accent3);border:1px solid rgba(77,159,255,0.3);padding:8px 16px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s}
+  .btn-import:hover{background:rgba(77,159,255,0.08)}
+  .btn-add{background:var(--accent);color:#0a0c10;border:none;padding:8px 18px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s}
+  .btn-add:hover{opacity:.85;transform:translateY(-1px)}
+
+  .stats-bar{display:flex;gap:1px;padding:0 32px;background:var(--border);border-bottom:1px solid var(--border)}
+  .stat-item{flex:1;padding:16px 20px;background:var(--surface);display:flex;align-items:center;gap:12px}
+  .stat-icon{font-size:18px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:var(--surface2)}
+  .stat-val{font-family:'Syne',sans-serif;font-size:22px;font-weight:700;line-height:1}
+  .stat-label{font-size:11px;color:var(--muted);margin-top:2px;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.5px}
+
+  .main{display:grid;grid-template-columns:280px 1fr;min-height:calc(100vh - 120px)}
+  .sidebar{border-right:1px solid var(--border);padding:24px 0;background:var(--surface)}
+  .sidebar-section{padding:0 20px;margin-bottom:28px}
+  .sidebar-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+  .filter-btn{display:flex;align-items:center;justify-content:space-between;width:100%;padding:9px 12px;background:transparent;border:1px solid transparent;border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;transition:all .15s;text-align:left;margin-bottom:2px}
+  .filter-btn:hover{background:var(--surface2)}
+  .filter-btn.active{background:rgba(0,229,160,0.08);border-color:rgba(0,229,160,0.2);color:var(--accent)}
+  .filter-count{font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);padding:2px 7px;border-radius:10px;color:var(--muted)}
+  .filter-btn.active .filter-count{background:rgba(0,229,160,0.15);color:var(--accent)}
+  .priority-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:8px}
+  .search-box{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:border-color .2s}
+  .search-box:focus{border-color:rgba(0,229,160,.4)}
+  .search-box::placeholder{color:var(--muted)}
+
+  .content{padding:28px 32px}
+  .content-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+  .content-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:600}
+  .sort-select{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:8px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer}
+  .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+
+  .account-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;transition:all .2s;position:relative;overflow:hidden;animation:fadeIn .4s ease both}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  .account-card:hover{border-color:rgba(0,229,160,0.25);transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.3)}
+  .account-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:14px 14px 0 0}
+  .account-card.hot::before{background:var(--hot)}.account-card.warm::before{background:var(--warm)}.account-card.cold::before{background:var(--cold)}
+  .card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px}
+  .company-info{display:flex;align-items:center;gap:12px}
+  .company-avatar{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700;font-size:16px;flex-shrink:0}
+  .company-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:600;margin-bottom:2px}
+  .company-segment{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace}
+  .priority-badge{font-size:10px;font-family:'DM Mono',monospace;padding:3px 8px;border-radius:20px;font-weight:500;text-transform:uppercase;letter-spacing:.5px;flex-shrink:0}
+  .badge-hot{background:rgba(255,71,87,.12);color:var(--hot);border:1px solid rgba(255,71,87,.3)}
+  .badge-warm{background:rgba(255,165,2,.12);color:var(--warm);border:1px solid rgba(255,165,2,.3)}
+  .badge-cold{background:rgba(77,159,255,.12);color:var(--cold);border:1px solid rgba(77,159,255,.3)}
+  .signals{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+  .signal-item{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;background:var(--surface2);border-radius:8px;border-left:2px solid transparent}
+  .signal-item.expansion{border-left-color:var(--accent)}.signal-item.news{border-left-color:var(--accent3)}.signal-item.competitor{border-left-color:var(--accent2)}
+  .signal-icon{font-size:13px;flex-shrink:0;margin-top:1px}
+  .signal-text{font-size:12px;color:var(--text);line-height:1.4;flex:1}
+  .signal-time{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;flex-shrink:0;margin-top:2px}
+  .card-footer{display:flex;align-items:center;justify-content:space-between;padding-top:12px;border-top:1px solid var(--border)}
+  .signal-count{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace}
+  .signal-count span{color:var(--accent);font-weight:500}
+  .card-actions{display:flex;gap:6px}
+  .btn-action{font-size:11px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 12px;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s}
+  .btn-action:hover{border-color:var(--accent);color:var(--accent)}
+  .btn-ai{font-size:11px;background:linear-gradient(135deg,rgba(0,229,160,0.1),rgba(77,159,255,0.1));border:1px solid rgba(0,229,160,0.25);color:var(--accent);padding:5px 12px;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;display:flex;align-items:center;gap:4px}
+  .btn-ai:hover{background:rgba(0,229,160,0.18)}.btn-ai.loading{opacity:.6;cursor:not-allowed}
+
+  .ai-panel{display:none;margin-top:12px;padding:14px;background:linear-gradient(135deg,rgba(0,229,160,0.05),rgba(77,159,255,0.05));border:1px solid rgba(0,229,160,0.2);border-radius:10px}
+  .ai-panel.visible{display:block;animation:fadeIn .3s ease}
+  .ai-panel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .ai-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:1px}
+  .ai-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0 4px}
+  .ai-text{font-size:12px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+  .ai-typing::after{content:'▋';animation:blink .8s infinite;color:var(--accent)}
+
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center}
+  .modal-overlay.open{display:flex}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;width:480px;max-width:90vw;max-height:85vh;overflow-y:auto;animation:slideUp .25s ease}
+  @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+  .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
+  .modal-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:700}
+  .modal-close{background:var(--surface2);border:1px solid var(--border);color:var(--muted);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+  .form-group{margin-bottom:16px}
+  .form-label{display:block;font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+  .form-input,.form-select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:border-color .2s}
+  .form-input:focus,.form-select:focus{border-color:rgba(0,229,160,.4)}
+  .form-select option{background:var(--surface2)}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .btn-submit{width:100%;background:var(--accent);color:#0a0c10;border:none;padding:12px;border-radius:10px;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;margin-top:8px}
+  .btn-submit:hover{opacity:.85}
+
+  .drop-zone{border:2px dashed rgba(77,159,255,0.3);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:16px}
+  .drop-zone:hover,.drop-zone.drag-over{border-color:var(--accent3);background:rgba(77,159,255,0.05)}
+  .drop-zone-icon{font-size:32px;margin-bottom:10px}
+  .drop-zone-text{font-size:13px;color:var(--muted);line-height:1.6}
+  .drop-zone-text strong{color:var(--accent3)}
+  .template-box{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px}
+  .template-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+  .template-cols{display:flex;gap:6px;flex-wrap:wrap}
+  .col-tag{background:rgba(0,229,160,0.08);border:1px solid rgba(0,229,160,0.2);color:var(--accent);font-family:'DM Mono',monospace;font-size:10px;padding:3px 8px;border-radius:6px}
+  .col-tag.optional{background:rgba(255,255,255,0.04);border-color:var(--border);color:var(--muted)}
+  .preview-table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:16px;max-height:180px;overflow-y:auto;display:block}
+  .preview-table th{background:var(--surface2);color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;font-size:10px;padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);position:sticky;top:0}
+  .preview-table td{padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text)}
+  .import-summary{display:flex;gap:10px;margin-bottom:16px}
+  .import-stat{flex:1;background:var(--surface2);border-radius:8px;padding:10px 12px;text-align:center}
+  .import-stat-val{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:var(--accent)}
+  .import-stat-label{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:2px}
+  .btn-download-template{width:100%;background:transparent;color:var(--accent3);border:1px dashed rgba(77,159,255,0.3);padding:9px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;transition:all .2s;margin-bottom:12px}
+
+  .empty-state{text-align:center;padding:60px 20px;color:var(--muted);display:none}
+  .empty-state.visible{display:block}
+  .empty-state-icon{font-size:40px;margin-bottom:12px}
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--accent);color:#0a0c10;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:500;z-index:999;transform:translateY(80px);transition:transform .3s ease;font-family:'DM Sans',sans-serif}
+  .toast.show{transform:translateY(0)}
+  ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ROLE PICKER (só escolhe admin ou viewer, sem digitar nada) -->
+  <div class="role-screen" id="role-screen">
+    <div class="role-box">
+      <div class="role-logo"></div>
+      <div class="role-title">Radar de Contas</div>
+      <div class="role-sub">Como você vai usar o app?</div>
+      <div class="role-btns">
+        <button class="role-btn" onclick="enterAs('admin')">
+          <span class="role-btn-icon">👑</span>
+          <strong>Admin</strong>
+          <span>Gerencio e edito</span>
+        </button>
+        <button class="role-btn" onclick="enterAs('viewer')">
+          <span class="role-btn-icon">👁️</span>
+          <strong>Visualizador</strong>
+          <span>Só visualizo</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon"></div>
+      <h1>Radar <span>de Contas</span></h1>
+    </div>
+    <div class="header-right">
+      <div class="sync-indicator" id="sync-indicator">⬤ conectando...</div>
+      <div class="live-badge"><div class="live-dot"></div>MONITORANDO</div>
+      <span class="role-badge admin" id="role-badge">👑 Admin</span>
+      <button class="btn-import" id="btn-import-header" onclick="openImportModal()">📥 Importar</button>
+      <button class="btn-excel" onclick="exportToExcel()">📊 Excel</button>
+      <button class="btn-add" id="btn-add-header" onclick="openModal()">+ Nova Conta</button>
+    </div>
+  </header>
+
+  <div class="stats-bar">
+    <div class="stat-item"><div class="stat-icon">🏢</div><div><div class="stat-val" id="total-count">0</div><div class="stat-label">Contas</div></div></div>
+    <div class="stat-item"><div class="stat-icon">🔥</div><div><div class="stat-val" id="hot-count" style="color:var(--hot)">0</div><div class="stat-label">Quentes</div></div></div>
+    <div class="stat-item"><div class="stat-icon">📡</div><div><div class="stat-val" id="signal-count" style="color:var(--accent)">0</div><div class="stat-label">Sinais hoje</div></div></div>
+    <div class="stat-item"><div class="stat-icon">⚡</div><div><div class="stat-val" id="opp-count" style="color:var(--warm)">0</div><div class="stat-label">Oportunidades</div></div></div>
+  </div>
+
+  <div class="main">
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Buscar</div>
+        <input class="search-box" type="text" placeholder="Buscar empresa..." id="search-input" oninput="filterCards()">
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Prioridade</div>
+        <button class="filter-btn active" onclick="setFilter('all',this)">Todas as contas <span class="filter-count" id="count-all">0</span></button>
+        <button class="filter-btn" onclick="setFilter('hot',this)"><span><span class="priority-dot" style="background:var(--hot)"></span>Quente</span><span class="filter-count" id="count-hot">0</span></button>
+        <button class="filter-btn" onclick="setFilter('warm',this)"><span><span class="priority-dot" style="background:var(--warm)"></span>Morno</span><span class="filter-count" id="count-warm">0</span></button>
+        <button class="filter-btn" onclick="setFilter('cold',this)"><span><span class="priority-dot" style="background:var(--cold)"></span>Frio</span><span class="filter-count" id="count-cold">0</span></button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Sinais</div>
+        <button class="filter-btn" onclick="setSignalFilter('expansion',this)">🏗️ Expansão de lojas</button>
+        <button class="filter-btn" onclick="setSignalFilter('news',this)">📰 Notícias e mídia</button>
+        <button class="filter-btn" onclick="setSignalFilter('competitor',this)">⚔️ Concorrentes</button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Segmento</div>
+        <button class="filter-btn" onclick="setSegFilter('all',this)">Todos</button>
+        <button class="filter-btn" onclick="setSegFilter('Supermercados',this)">Supermercados</button>
+        <button class="filter-btn" onclick="setSegFilter('Farmácias',this)">Farmácias</button>
+        <button class="filter-btn" onclick="setSegFilter('Moda',this)">Moda</button>
+        <button class="filter-btn" onclick="setSegFilter('Eletrônicos',this)">Eletrônicos</button>
+        <button class="filter-btn" onclick="setSegFilter('Home Center',this)">Home Center</button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Opções</div>
+        <button class="filter-btn" onclick="switchRole()" style="color:var(--muted)">🔄 Trocar perfil</button>
+        <button class="filter-btn" onclick="openGroqModal()" style="color:var(--accent)">🔑 Chave IA (gratuita)</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-header">
+        <div class="content-title" id="section-title">Todas as Contas</div>
+        <select class="sort-select" onchange="sortCards(this.value)">
+          <option value="priority">Ordenar: Prioridade</option>
+          <option value="name">Ordenar: Nome A-Z</option>
+          <option value="signals">Ordenar: Mais sinais</option>
+          <option value="recent">Ordenar: Mais recente</option>
+        </select>
+      </div>
+      <div class="cards-grid" id="cards-grid"></div>
+      <div class="empty-state" id="empty-state">
+        <div class="empty-state-icon">📡</div>
+        <p>Nenhuma conta ainda. Adicione a primeira!</p>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- MODAL ADD/SIGNAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModalOnOverlay(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Nova Conta</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nome da empresa *</label>
+      <div style="display:flex;gap:8px">
+        <input class="form-input" id="f-name" placeholder="Ex: Grupo Pão de Açúcar" style="flex:1">
+        <button id="btn-autofill" onclick="autofillWithAI()" style="background:linear-gradient(135deg,rgba(0,229,160,0.15),rgba(77,159,255,0.15));border:1px solid rgba(0,229,160,0.3);color:var(--accent);padding:0 14px;border-radius:8px;cursor:pointer;font-size:13px;white-space:nowrap;flex-shrink:0">✨ IA</button>
+      </div>
+    </div>
+    <div id="autofill-status" style="display:none;margin-bottom:12px;padding:10px 14px;background:linear-gradient(135deg,rgba(0,229,160,0.07),rgba(77,159,255,0.07));border:1px solid rgba(0,229,160,0.2);border-radius:8px;font-size:12px;color:var(--accent)">
+      <span id="autofill-status-text">🔍 Pesquisando...</span>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Segmento</label>
+        <select class="form-select" id="f-segment">
+          <option value="">Selecione...</option>
+          <option>Supermercados</option><option>Farmácias</option><option>Moda</option><option>Eletrônicos</option><option>Home Center</option><option>Outros</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Prioridade</label>
+        <select class="form-select" id="f-priority"><option value="cold">🔵 Frio</option><option value="warm">🟡 Morno</option><option value="hot">🔴 Quente</option></select>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Nº de lojas</label><input class="form-input" id="f-stores" type="number" placeholder="Preenchido automaticamente pela IA"></div>
+    <div class="form-group"><label class="form-label">Sinal inicial</label><input class="form-input" id="f-signal-text" placeholder="Preenchido automaticamente pela IA"></div>
+    <div class="form-group"><label class="form-label">Tipo do sinal</label>
+      <select class="form-select" id="f-signal-type"><option value="expansion">🏗️ Expansão de lojas</option><option value="news">📰 Notícia / Mídia</option><option value="competitor">⚔️ Movimento de concorrente</option></select>
+    </div>
+    <button class="btn-submit" onclick="addAccount()">Adicionar ao Radar</button>
+  </div>
+</div>
+
+<!-- MODAL IMPORT -->
+<div class="modal-overlay" id="import-overlay" onclick="closeImportOnOverlay(event)">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-header">
+      <div class="modal-title">📥 Importar Contas em Massa</div>
+      <button class="modal-close" onclick="closeImportModal()">✕</button>
+    </div>
+    <div id="import-step-1">
+      <div class="template-box">
+        <div class="template-label">Colunas esperadas</div>
+        <div class="template-cols">
+          <span class="col-tag">Nome</span><span class="col-tag">Segmento</span><span class="col-tag">Prioridade</span>
+          <span class="col-tag optional">Lojas</span><span class="col-tag optional">Sinal</span><span class="col-tag optional">Tipo Sinal</span>
+        </div>
+      </div>
+      <button class="btn-download-template" onclick="downloadTemplate()">⬇️ Baixar planilha modelo</button>
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <div class="drop-zone-icon">📂</div>
+        <div class="drop-zone-text"><strong>Clique para selecionar</strong> ou arraste aqui<br>Aceita <strong>.xlsx</strong>, <strong>.xls</strong> ou <strong>.csv</strong></div>
+      </div>
+      <input type="file" id="file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFile(event)">
+    </div>
+    <div id="import-step-2" style="display:none">
+      <div class="import-summary" id="import-summary"></div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Pré-visualização</div>
+      <table class="preview-table" id="preview-table"></table>
+      <button class="btn-submit" onclick="confirmImport()">✅ Confirmar Importação</button>
+      <button style="width:100%;background:transparent;border:1px solid var(--border);color:var(--muted);padding:9px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;margin-top:8px" onclick="resetImport()">← Voltar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL GROQ KEY -->
+<div class="modal-overlay" id="groq-overlay" onclick="if(event.target===this)closeGroqModal()">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">🔑 Chave IA Gratuita</div>
+      <button class="modal-close" onclick="closeGroqModal()">✕</button>
+    </div>
+    <div style="background:rgba(0,229,160,0.06);border:1px solid rgba(0,229,160,0.2);border-radius:10px;padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--muted)">
+      O Google Gemini oferece IA <strong style="color:var(--accent)">100% gratuita</strong> com sua conta Google.<br><br>
+      1. Acesse <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com/apikey</a><br>
+      2. Faça login com sua conta Google<br>
+      3. Clique em <strong style="color:var(--text)">Create API Key</strong><br>
+      4. Cole a chave abaixo
+    </div>
+    <div class="form-group"><label class="form-label">Chave Gemini (AIza...)</label><input class="form-input" id="f-groqkey" type="password" placeholder="AIza..."></div>
+    <button class="btn-submit" onclick="saveGroqKey()">Salvar Chave</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════
+// CONFIGURAÇÃO FIXA — Supabase
+// ═══════════════════════════════════════
+const SB_URL = 'https://hvncjjuwzlgldxbfauxv.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bmNqanV3emxnbGR4YmZhdXh2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2MzA5NTEsImV4cCI6MjA4NzIwNjk1MX0.5FzYbLZnthTnBUakOVuH_zWoC26iDOtFRCq0bNT4VPc';
+const TABLE  = 'contas';
+
+const COLORS=[['#00e5a0','#0a2a1e'],['#4d9fff','#0a1a2e'],['#ff6b35','#2e1a0a'],['#a855f7','#1e0a2e'],['#f59e0b','#2e1e0a'],['#ec4899','#2e0a1e'],['#10b981','#0a2e1e'],['#6366f1','#0a0e2e']];
+let accounts=[], userRole='', currentFilter='all', currentSignalFilter=null, currentSegFilter='all', currentSort='priority', searchQuery='';
+
+// ═══════════════════════════════════════
+// ROLE PICKER
+// ═══════════════════════════════════════
+function enterAs(role) {
+  userRole = role;
+  sessionStorage.setItem('role', role);
+  document.getElementById('role-screen').style.display = 'none';
+  applyRole();
+  loadFromSupabase();
+  setInterval(loadFromSupabase, 30000);
+}
+
+function switchRole() {
+  sessionStorage.removeItem('role');
+  location.reload();
+}
+
+function applyRole() {
+  const isAdmin = userRole === 'admin';
+  document.getElementById('role-badge').textContent = isAdmin ? '👑 Admin' : '👁️ Viewer';
+  document.getElementById('role-badge').className = `role-badge ${isAdmin?'admin':'viewer'}`;
+  document.getElementById('btn-add-header').style.display = isAdmin ? '' : 'none';
+  document.getElementById('btn-import-header').style.display = isAdmin ? '' : 'none';
+}
+
+// Restore session role on reload
+const savedRole = sessionStorage.getItem('role');
+if(savedRole) { userRole = savedRole; document.getElementById('role-screen').style.display='none'; applyRole(); loadFromSupabase(); setInterval(loadFromSupabase,30000); }
+
+// ═══════════════════════════════════════
+// SUPABASE
+// ═══════════════════════════════════════
+function sbHeaders(extra={}) {
+  return { 'apikey':SB_KEY, 'Authorization':`Bearer ${SB_KEY}`, 'Content-Type':'application/json', 'Prefer':'return=minimal', ...extra };
+}
+
+async function loadFromSupabase() {
+  setSyncStatus('syncing','sincronizando...');
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/${TABLE}?select=*&order=updated_at.desc`, { headers: sbHeaders() });
+    if(!r.ok) throw new Error(await r.text());
+    const rows = await r.json();
+    accounts = rows.map(row => row.data);
+    renderCards();
+    setSyncStatus('synced', `${accounts.length} contas`);
+  } catch(e) {
+    setSyncStatus('error', 'erro ao sincronizar');
+    console.error('Supabase error:', e);
+  }
+}
+
+async function saveToSupabase(acc) {
+  setSyncStatus('syncing','salvando...');
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/${TABLE}`, {
+      method:'POST',
+      headers: sbHeaders({'Prefer':'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify({ id: String(acc.id), data: acc, updated_at: new Date().toISOString() })
+    });
+    if(!r.ok) throw new Error(await r.text());
+    setSyncStatus('synced', `${accounts.length} contas`);
+  } catch(e) {
+    setSyncStatus('error','erro ao salvar');
+    console.error('Save error:', e);
+  }
+}
+
+function setSyncStatus(state, msg) {
+  const el = document.getElementById('sync-indicator');
+  el.className = `sync-indicator ${state}`;
+  el.textContent = `${state==='syncing'?'↻':state==='synced'?'⬤':'⚠'} ${msg}`;
+}
+
+// ═══════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════
+function getInitials(n){return n.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();}
+function priorityOrder(p){return p==='hot'?0:p==='warm'?1:2;}
+function getSorted(list){return[...list].sort((a,b)=>{if(currentSort==='priority')return priorityOrder(a.priority)-priorityOrder(b.priority);if(currentSort==='name')return a.name.localeCompare(b.name);if(currentSort==='signals')return b.signals.length-a.signals.length;if(currentSort==='recent')return b.createdAt-a.createdAt;});}
+function getFiltered(){return accounts.filter(a=>{if(currentFilter!=='all'&&a.priority!==currentFilter)return false;if(currentSegFilter!=='all'&&a.segment!==currentSegFilter)return false;if(searchQuery&&!a.name.toLowerCase().includes(searchQuery.toLowerCase()))return false;if(currentSignalFilter&&!a.signals.some(s=>s.type===currentSignalFilter))return false;return true;});}
+
+function renderCards(){
+  const grid=document.getElementById('cards-grid'), empty=document.getElementById('empty-state');
+  const filtered=getSorted(getFiltered());
+  updateStats();updateCounts();
+  if(filtered.length===0){grid.innerHTML='';empty.classList.add('visible');return;}
+  empty.classList.remove('visible');
+  const isAdmin=userRole==='admin';
+  const si={expansion:'🏗️',news:'📰',competitor:'⚔️'}, sc={expansion:'expansion',news:'news',competitor:'competitor'};
+  grid.innerHTML=filtered.map((a,i)=>{
+    const color=a.color||COLORS[i%COLORS.length];
+    const bl=a.priority==='hot'?'🔴 Quente':a.priority==='warm'?'🟡 Morno':'🔵 Frio';
+    const ts=a.signals.slice(0,2).map(s=>`<div class="signal-item ${sc[s.type]}"><div class="signal-icon">${si[s.type]}</div><div class="signal-text">${s.text}</div><div class="signal-time">${s.time}</div></div>`).join('');
+    return `<div class="account-card ${a.priority}" style="animation-delay:${i*.05}s">
+      <div class="card-top">
+        <div class="company-info">
+          <div class="company-avatar" style="background:${color[1]};color:${color[0]}">${getInitials(a.name)}</div>
+          <div><div class="company-name">${a.name}</div><div class="company-segment">${a.segment||''}${a.stores?' · '+Number(a.stores).toLocaleString()+' lojas':''}</div></div>
+        </div>
+        <div class="priority-badge badge-${a.priority}">${bl}</div>
+      </div>
+      <div class="signals">${ts}</div>
+      <div id="ai-panel-${a.id}" class="ai-panel"></div>
+      <div class="card-footer">
+        <div class="signal-count"><span>${a.signals.length}</span> sinal${a.signals.length!==1?'is':''}</div>
+        <div class="card-actions">
+          <button class="btn-ai" id="btn-ai-${a.id}" onclick="generateSummary(${JSON.stringify(a.id)})">✨ Resumo IA</button>
+          ${isAdmin?`<button class="btn-action" onclick="addSignalModal(${JSON.stringify(a.id)})">+ Sinal</button>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateStats(){
+  document.getElementById('total-count').textContent=accounts.length;
+  document.getElementById('hot-count').textContent=accounts.filter(a=>a.priority==='hot').length;
+  document.getElementById('signal-count').textContent=accounts.reduce((s,a)=>s+a.signals.filter(sig=>['agora','IA','importado'].some(t=>sig.time===t)||sig.time.includes('h')).length,0);
+  document.getElementById('opp-count').textContent=accounts.filter(a=>a.priority!=='cold').length;
+}
+function updateCounts(){
+  document.getElementById('count-all').textContent=accounts.length;
+  document.getElementById('count-hot').textContent=accounts.filter(a=>a.priority==='hot').length;
+  document.getElementById('count-warm').textContent=accounts.filter(a=>a.priority==='warm').length;
+  document.getElementById('count-cold').textContent=accounts.filter(a=>a.priority==='cold').length;
+}
+function setFilter(f,btn){currentFilter=f;currentSignalFilter=null;currentSegFilter='all';document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');const l={all:'Todas as Contas',hot:'Contas Quentes',warm:'Contas Mornas',cold:'Contas Frias'};document.getElementById('section-title').textContent=l[f]||'Contas';renderCards();}
+function setSignalFilter(f,btn){currentSignalFilter=currentSignalFilter===f?null:f;document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));if(currentSignalFilter)btn.classList.add('active');renderCards();}
+function setSegFilter(f,btn){currentSegFilter=f;document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderCards();}
+function filterCards(){searchQuery=document.getElementById('search-input').value;renderCards();}
+function sortCards(val){currentSort=val;renderCards();}
+
+// ═══════════════════════════════════════
+// ADD / SIGNAL
+// ═══════════════════════════════════════
+let addSignalFor=null;
+function openModal(){if(userRole!=='admin')return;addSignalFor=null;document.getElementById('modal-title').textContent='Nova Conta';document.getElementById('modal-overlay').classList.add('open');}
+function addSignalModal(id){if(userRole!=='admin')return;addSignalFor=id;const acc=accounts.find(a=>a.id===id);document.getElementById('modal-title').textContent=`+ Sinal · ${acc.name}`;document.getElementById('f-name').value=acc.name;document.getElementById('f-segment').value=acc.segment||'';document.getElementById('f-priority').value=acc.priority;document.getElementById('f-stores').value=acc.stores||'';document.getElementById('f-signal-text').value='';document.getElementById('modal-overlay').classList.add('open');}
+function closeModal(){document.getElementById('modal-overlay').classList.remove('open');addSignalFor=null;document.getElementById('autofill-status').style.display='none';window._extraSignals=null;['f-name','f-segment','f-priority','f-stores','f-signal-text'].forEach(id=>{const el=document.getElementById(id);if(el.tagName==='SELECT')el.selectedIndex=0;else el.value=''});}
+function closeModalOnOverlay(e){if(e.target===document.getElementById('modal-overlay'))closeModal();}
+
+async function addAccount(){
+  if(userRole!=='admin')return;
+  const name=document.getElementById('f-name').value.trim();
+  const segment=document.getElementById('f-segment').value;
+  const priority=document.getElementById('f-priority').value;
+  const stores=document.getElementById('f-stores').value;
+  const signalText=document.getElementById('f-signal-text').value.trim();
+  const signalType=document.getElementById('f-signal-type').value;
+  if(!name){showToast('⚠️ Informe o nome da empresa');return;}
+  if(addSignalFor!==null){
+    const acc=accounts.find(a=>a.id===addSignalFor);
+    acc.priority=priority;
+    if(signalText)acc.signals.unshift({type:signalType,text:signalText,time:'agora'});
+    await saveToSupabase(acc);
+    showToast('✅ Sinal adicionado!');
+  } else {
+    const signals=signalText?[{type:signalType,text:signalText,time:'agora'}]:[];
+    if(window._extraSignals){window._extraSignals.forEach(s=>signals.push({type:s.type,text:s.text,time:'IA'}));window._extraSignals=null;}
+    const acc={id:Date.now(),name,segment,priority,stores:stores||null,color:COLORS[accounts.length%COLORS.length],signals,createdAt:Date.now()};
+    accounts.push(acc);
+    await saveToSupabase(acc);
+    showToast('✅ Conta adicionada!');
+  }
+  closeModal();renderCards();
+}
+
+// ═══════════════════════════════════════
+// BUSCA DE NOTÍCIAS — Google Custom Search (gratuito)
+// ═══════════════════════════════════════
+const GEMINI_KEY = 'AIzaSyBHOVir1_DmaRk2_j1BKNi0DHy_4iRPtME';
+
+async function searchNews(companyName) {
+  const query = encodeURIComponent(`${companyName} expansão lojas notícias`);
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      contents:[{parts:[{text:`Você é um especialista em varejo brasileiro. Com base no seu conhecimento sobre a empresa "${companyName}", gere um briefing executivo de vendas B2B em português com no máximo 120 palavras.
+
+Estruture em 3 partes curtas:
+🎯 MOMENTO: O que está acontecendo com esta empresa (expansão, resultados, mudanças)
+💡 OPORTUNIDADE: Como posicionar tecnologia para varejo neste contexto
+🚀 AÇÃO: Próximo passo concreto para o vendedor
+
+Seja específico e direto. Foque em sinais de compra reais.`}]}],
+      generationConfig:{maxOutputTokens:300}
+    })
+  });
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||`Erro ${res.status}`);}
+  const data=await res.json();
+  return data.candidates[0].content.parts[0].text;
+}
+
+async function callClaude(prompt, maxTokens=500){
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      contents:[{parts:[{text:prompt}]}],
+      generationConfig:{maxOutputTokens:maxTokens}
+    })
+  });
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||`Erro ${res.status}`);}
+  const data=await res.json();
+  return data.candidates[0].content.parts[0].text;
+}
+
+async function generateSummary(id){
+  const acc=accounts.find(a=>a.id===id);
+  const panel=document.getElementById(`ai-panel-${id}`);
+  const btn=document.getElementById(`btn-ai-${id}`);
+  if(panel.classList.contains('visible')){panel.classList.remove('visible');return;}
+  btn.classList.add('loading');btn.textContent='⏳';
+  panel.innerHTML=`<div class="ai-panel-header"><div class="ai-label">✨ Análise IA</div></div><div class="ai-text ai-typing" id="ai-text-${id}">Buscando informações sobre ${acc.name}...</div>`;
+  panel.classList.add('visible');
+  try{
+    const text = await searchNews(acc.name);
+    const textEl=document.getElementById(`ai-text-${id}`);
+    if(textEl){textEl.classList.remove('ai-typing');let i=0;textEl.textContent='';const iv=setInterval(()=>{if(i<text.length){textEl.textContent+=text[i];i++;}else clearInterval(iv);},8);}
+    panel.querySelector('.ai-panel-header').innerHTML=`<div class="ai-label">✨ Análise IA</div><button class="ai-close" onclick="document.getElementById('ai-panel-${id}').classList.remove('visible')">✕</button>`;
+  }catch(err){
+    panel.innerHTML=`<div class="ai-panel-header"><div class="ai-label">❌ Erro</div></div><div class="ai-text" style="color:var(--hot)">${err.message}</div>`;
+  }
+  btn.classList.remove('loading');btn.innerHTML='✨ Resumo IA';
+}
+
+async function autofillWithAI(){
+  const name=document.getElementById('f-name').value.trim();
+  if(!name){showToast('⚠️ Digite o nome da empresa primeiro');return;}
+  const btn=document.getElementById('btn-autofill');
+  const status=document.getElementById('autofill-status');
+  btn.textContent='⏳';btn.disabled=true;
+  status.style.display='block';
+  document.getElementById('autofill-status-text').textContent='🔍 Pesquisando '+name+'...';
+  try{
+    const raw=await callClaude(`Especialista em varejo BR. Sobre "${name}", retorne APENAS JSON válido sem markdown:
+{"segment":"Supermercados|Farmácias|Moda|Eletrônicos|Home Center|Outros","stores":número_ou_null,"priority":"hot|warm|cold","priority_reason":"frase curta","signals":[{"type":"expansion|news|competitor","text":"sinal máx 12 palavras"},{"type":"...","text":"..."},{"type":"...","text":"..."}]}`,500);
+    const info=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    if(info.segment){const s=document.getElementById('f-segment');for(let o of s.options)if(o.value===info.segment){s.value=info.segment;break;}}
+    if(info.stores)document.getElementById('f-stores').value=info.stores;
+    if(info.priority)document.getElementById('f-priority').value=info.priority;
+    if(info.signals&&info.signals.length>0){document.getElementById('f-signal-text').value=info.signals[0].text;document.getElementById('f-signal-type').value=info.signals[0].type;}
+    window._extraSignals=(info.signals||[]).slice(1);
+    status.innerHTML=`<span>✅ Preenchido${info.priority_reason?' · '+info.priority_reason:''}</span>`;
+    showToast('✅ Dados preenchidos!');
+  }catch(e){
+    status.innerHTML=`<span style="color:var(--hot)">❌ Não foi possível buscar. Preencha manualmente.</span>`;
+  }
+  btn.textContent='✨ IA';btn.disabled=false;
+}
+
+// ═══════════════════════════════════════
+// EXPORT EXCEL
+// ═══════════════════════════════════════
+function exportToExcel(){
+  const pL={hot:'Quente',warm:'Morno',cold:'Frio'}, sL={expansion:'Expansão',news:'Notícia',competitor:'Concorrente'};
+  const r1=[['Empresa','Segmento','Prioridade','Nº Lojas','Sinais','Detalhes','Cadastro']];
+  accounts.forEach(a=>r1.push([a.name,a.segment||'-',pL[a.priority],a.stores||'-',a.signals.length,a.signals.map(s=>s.text).join(' | '),new Date(a.createdAt).toLocaleDateString('pt-BR')]));
+  const r2=[['Empresa','Segmento','Prioridade','Tipo','Descrição','Quando']];
+  accounts.forEach(a=>a.signals.forEach(s=>r2.push([a.name,a.segment||'-',pL[a.priority],sL[s.type]||s.type,s.text,s.time])));
+  const r3=[['Empresa','Segmento','Nº Lojas','Último Sinal','Tipo']];
+  accounts.filter(a=>a.priority==='hot').forEach(a=>{const l=a.signals[0];r3.push([a.name,a.segment||'-',a.stores||'-',l?l.text:'-',l?sL[l.type]:'-']);});
+  const wb=XLSX.utils.book_new();
+  const w1=XLSX.utils.aoa_to_sheet(r1);w1['!cols']=[{wch:25},{wch:15},{wch:10},{wch:10},{wch:8},{wch:60},{wch:12}];
+  const w2=XLSX.utils.aoa_to_sheet(r2);w2['!cols']=[{wch:25},{wch:15},{wch:10},{wch:15},{wch:60},{wch:12}];
+  const w3=XLSX.utils.aoa_to_sheet(r3);w3['!cols']=[{wch:25},{wch:15},{wch:10},{wch:60},{wch:15}];
+  XLSX.utils.book_append_sheet(wb,w1,'Radar Completo');
+  XLSX.utils.book_append_sheet(wb,w2,'Todos os Sinais');
+  XLSX.utils.book_append_sheet(wb,w3,'Contas Quentes');
+  XLSX.writeFile(wb,`radar-${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.xlsx`);
+  showToast('📊 Excel exportado!');
+}
+
+// ═══════════════════════════════════════
+// IMPORT
+// ═══════════════════════════════════════
+let importPreviewData=[];
+function openImportModal(){if(userRole!=='admin')return;resetImport();document.getElementById('import-overlay').classList.add('open');}
+function closeImportModal(){document.getElementById('import-overlay').classList.remove('open');}
+function closeImportOnOverlay(e){if(e.target===document.getElementById('import-overlay'))closeImportModal();}
+function onDragOver(e){e.preventDefault();document.getElementById('drop-zone').classList.add('drag-over');}
+function onDragLeave(){document.getElementById('drop-zone').classList.remove('drag-over');}
+function onDrop(e){e.preventDefault();document.getElementById('drop-zone').classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)processFile(f);}
+function handleFile(e){const f=e.target.files[0];if(f)processFile(f);}
+function processFile(file){
+  const reader=new FileReader(), isCsv=file.name.endsWith('.csv');
+  reader.onload=function(e){
+    let rows=[];
+    if(isCsv){rows=e.target.result.split('\n').map(r=>r.split(/[,;]/).map(c=>c.trim().replace(/^"|"$/g,'')));}
+    else{const wb=XLSX.read(e.target.result,{type:'binary'});rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});}
+    parseImportRows(rows);
+  };
+  if(isCsv)reader.readAsText(file,'UTF-8');else reader.readAsBinaryString(file);
+}
+function parseImportRows(rows){
+  if(rows.length<2){showToast('⚠️ Arquivo vazio');return;}
+  const h=rows[0].map(x=>String(x).toLowerCase().trim());
+  const ci={nome:h.findIndex(x=>x.includes('nome')||x.includes('empresa')),seg:h.findIndex(x=>x.includes('seg')),pri:h.findIndex(x=>x.includes('prior')||x.includes('status')),loj:h.findIndex(x=>x.includes('loja')||x.includes('store')),sin:h.findIndex(x=>x.includes('sinal')||x.includes('obs')),tip:h.findIndex(x=>x.includes('tipo')||x.includes('type'))};
+  if(ci.nome===-1){showToast('⚠️ Coluna "Nome" não encontrada');return;}
+  const pm={'quente':'hot','hot':'hot','morno':'warm','warm':'warm','frio':'cold','cold':'cold','':'cold'};
+  const tm={'expansão':'expansion','expansao':'expansion','expansion':'expansion','notícia':'news','noticia':'news','news':'news','concorrente':'competitor','competitor':'competitor','':'expansion'};
+  importPreviewData=rows.slice(1).filter(r=>r[ci.nome]?.toString().trim()).map(r=>{
+    const g=(i)=>i>=0?String(r[i]||'').trim():'';
+    return{name:g(ci.nome),segment:g(ci.seg)||'Outros',priority:pm[g(ci.pri).toLowerCase()]||'cold',stores:g(ci.loj)||null,signalText:g(ci.sin),signalType:tm[g(ci.tip).toLowerCase()]||'expansion'};
+  });
+  if(!importPreviewData.length){showToast('⚠️ Nenhuma conta válida');return;}
+  showImportPreview();
+}
+function showImportPreview(){
+  document.getElementById('import-step-1').style.display='none';
+  document.getElementById('import-step-2').style.display='block';
+  const ex=accounts.map(a=>a.name.toLowerCase());
+  const nw=importPreviewData.filter(r=>!ex.includes(r.name.toLowerCase()));
+  document.getElementById('import-summary').innerHTML=`<div class="import-stat"><div class="import-stat-val">${importPreviewData.length}</div><div class="import-stat-label">No arquivo</div></div><div class="import-stat"><div class="import-stat-val" style="color:var(--accent)">${nw.length}</div><div class="import-stat-label">Novas</div></div><div class="import-stat"><div class="import-stat-val" style="color:var(--warm)">${importPreviewData.length-nw.length}</div><div class="import-stat-label">Duplicadas</div></div>`;
+  const pl={hot:'🔴 Quente',warm:'🟡 Morno',cold:'🔵 Frio'};
+  document.getElementById('preview-table').innerHTML=`<thead><tr><th>Empresa</th><th>Segmento</th><th>Prioridade</th><th>Lojas</th></tr></thead><tbody>${importPreviewData.slice(0,8).map(r=>`<tr><td>${r.name}</td><td>${r.segment}</td><td>${pl[r.priority]}</td><td>${r.stores||'-'}</td></tr>`).join('')}${importPreviewData.length>8?`<tr><td colspan="4" style="text-align:center;color:var(--muted)">... e mais ${importPreviewData.length-8}</td></tr>`:''}</tbody>`;
+}
+async function confirmImport(){
+  const ex=accounts.map(a=>a.name.toLowerCase());
+  let added=0; const newAccs=[];
+  importPreviewData.forEach(r=>{
+    if(ex.includes(r.name.toLowerCase()))return;
+    const acc={id:Date.now()+Math.random(),name:r.name,segment:r.segment,priority:r.priority,stores:r.stores||null,color:COLORS[accounts.length%COLORS.length],signals:r.signalText?[{type:r.signalType,text:r.signalText,time:'importado'}]:[],createdAt:Date.now()};
+    accounts.push(acc);newAccs.push(acc);added++;
+  });
+  closeImportModal();renderCards();
+  showToast(`✅ ${added} conta${added!==1?'s':''} importada${added!==1?'s':''}!`);
+  await Promise.all(newAccs.map(a=>saveToSupabase(a)));
+}
+function resetImport(){importPreviewData=[];document.getElementById('import-step-1').style.display='block';document.getElementById('import-step-2').style.display='none';document.getElementById('file-input').value='';}
+function downloadTemplate(){
+  const ws=XLSX.utils.aoa_to_sheet([['Nome','Segmento','Prioridade','Lojas','Sinal','Tipo Sinal'],['Grupo Exemplo','Supermercados','quente','120','Inaugurou 5 lojas em SP','expansão'],['Farmácia Modelo','Farmácias','morno','45','',''],['Loja Teste','Moda','frio','12','Nova diretoria assumiu','notícia']]);
+  ws['!cols']=[{wch:25},{wch:15},{wch:12},{wch:8},{wch:40},{wch:15}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Contas');
+  XLSX.writeFile(wb,'modelo-importacao-radar.xlsx');showToast('⬇️ Modelo baixado!');
+}
+
+
+function openGroqModal(){const k=localStorage.getItem('groq-api-key')||'';document.getElementById('f-groqkey').value=k;document.getElementById('groq-overlay').classList.add('open');}
+function closeGroqModal(){document.getElementById('groq-overlay').classList.remove('open');}
+function saveGroqKey(){const k=document.getElementById('f-groqkey').value.trim();if(!k){showToast('⚠️ Insira uma chave válida');return;}localStorage.setItem('groq-api-key',k);showToast('✅ Chave IA salva!');closeGroqModal();}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000);}
+</script>
+</body>
+</html>
